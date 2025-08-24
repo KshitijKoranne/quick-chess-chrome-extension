@@ -1,0 +1,15 @@
+# Claude Code settings
+.claude/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Zip files
+*.zip
+
+# Development files
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
