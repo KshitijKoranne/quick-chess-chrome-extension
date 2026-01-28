@@ -109,52 +109,62 @@ class QuickChess {
     if (this.game.game_over() || this.isAiThinking) {
       return;
     }
-    
+
     this.isAiThinking = true;
     this.updateStatus('AI is thinking...');
     this.addThinkingIndicator();
-    
-    // Get possible moves
-    const possibleMoves = this.game.moves({ verbose: true });
-    
-    if (possibleMoves.length === 0) {
-      this.isAiThinking = false;
-      this.removeThinkingIndicator();
-      this.updateStatus();
-      return;
-    }
-    
-    // Select move based on difficulty
-    let selectedMove;
-    
-    switch (this.difficulty) {
-      case 'easy':
-        selectedMove = this.getEasyMove(possibleMoves);
-        break;
-      case 'medium':
-        selectedMove = this.getMediumMove(possibleMoves);
-        break;
-      case 'hard':
-        selectedMove = this.getHardMove(possibleMoves);
-        break;
-    }
-    
-    // Make the move
-    setTimeout(() => {
-      if (selectedMove) {
-        this.game.move(selectedMove);
-        this.board.position(this.game.fen());
-        
-        // Store move for highlighting
-        this.lastMoveSquares = [selectedMove.from, selectedMove.to];
-        this.highlightLastMove();
+
+    // Reset node count for yielding
+    this.nodeCount = 0;
+
+    // Run AI calculation asynchronously
+    setTimeout(async () => {
+      try {
+        const possibleMoves = this.game.moves({ verbose: true });
+        if (possibleMoves.length === 0) {
+          this.isAiThinking = false;
+          this.removeThinkingIndicator();
+          this.updateStatus();
+          return;
+        }
+
+        let selectedMove;
+        switch (this.difficulty) {
+          case 'easy':
+            selectedMove = this.getEasyMove(possibleMoves);
+            break;
+          case 'medium':
+            selectedMove = await this.getMediumMove(possibleMoves);
+            break;
+          case 'hard':
+            selectedMove = await this.getHardMove(possibleMoves);
+            break;
+          case 'grandmaster':
+            selectedMove = await this.getGrandmasterMove(possibleMoves);
+            break;
+        }
+
+        // Make the move
+        if (selectedMove) {
+          this.game.move(selectedMove);
+          this.board.position(this.game.fen());
+
+          // Store move for highlighting
+          this.lastMoveSquares = [selectedMove.from, selectedMove.to];
+          this.highlightLastMove();
+        }
+
+        this.isAiThinking = false;
+        this.removeThinkingIndicator();
+        this.updateStatus();
+        this.saveGameState();
+      } catch (error) {
+        console.error('AI move error:', error);
+        this.isAiThinking = false;
+        this.removeThinkingIndicator();
+        this.updateStatus();
       }
-      
-      this.isAiThinking = false;
-      this.removeThinkingIndicator();
-      this.updateStatus();
-      this.saveGameState();
-    }, 800); // Additional delay for thinking effect
+    }, 50);
   }
 
   getEasyMove(moves) {
@@ -168,55 +178,353 @@ class QuickChess {
     return moves[Math.floor(Math.random() * moves.length)];
   }
 
-  getMediumMove(moves) {
-    // Medium: Prefer captures and avoid blunders
-    let bestMoves = [];
-    let bestScore = -Infinity;
-    
+  async getMediumMove(moves) {
+    // Medium: Look 2 moves ahead with minimax
+    return await this.findBestMove(2);
+  }
+
+  async getHardMove(moves) {
+    // Hard: Look 3 moves ahead with minimax
+    return await this.findBestMove(3);
+  }
+
+  async getGrandmasterMove(moves) {
+    // Grandmaster: Look 4 moves ahead with advanced evaluation
+    return await this.findBestMove(4);
+  }
+
+  async findBestMove(depth) {
+    const moves = this.game.moves({ verbose: true });
+    if (moves.length === 0) return null;
+
+    let bestMove = null;
+    let bestValue = -Infinity;
+    let alpha = -Infinity;
+    let beta = Infinity;
+
+    // Order moves for better alpha-beta pruning (captures first)
+    const orderedMoves = this.orderMoves(moves);
+
+    for (let move of orderedMoves) {
+      this.game.move(move);
+      const value = -await this.minimax(depth - 1, -beta, -alpha, false);
+      this.game.undo();
+
+      if (value > bestValue) {
+        bestValue = value;
+        bestMove = move;
+      }
+
+      alpha = Math.max(alpha, value);
+      if (alpha >= beta) {
+        break; // Beta cutoff
+      }
+    }
+
+    return bestMove;
+  }
+
+  orderMoves(moves) {
+    // Order moves to improve alpha-beta pruning efficiency
+    // Captures first, then other moves
+    const captures = moves.filter(m => m.captured);
+    const others = moves.filter(m => !m.captured);
+
+    // Shuffle for variety
+    this.shuffleArray(captures);
+    this.shuffleArray(others);
+
+    return [...captures, ...others];
+  }
+
+  async minimax(depth, alpha, beta, isMaximizing) {
+    // Yield every 500 nodes to keep UI responsive
+    this.nodeCount++;
+    if (this.nodeCount % 500 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    // Check for terminal conditions
+    if (depth === 0 || this.game.game_over()) {
+      return this.evaluatePosition();
+    }
+
+    const moves = this.game.moves({ verbose: true });
+    if (moves.length === 0) {
+      return this.evaluatePosition();
+    }
+
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+
+      for (let move of moves) {
+        const moveResult = this.game.move(move);
+        if (moveResult) {
+          const eval_score = await this.minimax(depth - 1, alpha, beta, false);
+          this.game.undo();
+
+          maxEval = Math.max(maxEval, eval_score);
+          alpha = Math.max(alpha, eval_score);
+
+          if (beta <= alpha) {
+            break; // Alpha-beta pruning
+          }
+        }
+      }
+
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+
+      for (let move of moves) {
+        const moveResult = this.game.move(move);
+        if (moveResult) {
+          const eval_score = await this.minimax(depth - 1, alpha, beta, true);
+          this.game.undo();
+
+          minEval = Math.min(minEval, eval_score);
+          beta = Math.min(beta, eval_score);
+
+          if (beta <= alpha) {
+            break; // Alpha-beta pruning
+          }
+        }
+      }
+
+      return minEval;
+    }
+  }
+
+  evaluatePosition() {
+    // Check for game over
+    if (this.game.in_checkmate()) {
+      return this.game.turn() === 'b' ? 10000 : -10000;
+    }
+    if (this.game.in_stalemate() || this.game.in_threefold_repetition() ||
+        this.game.insufficient_material() || this.game.in_draw()) {
+      return 0;
+    }
+
+    let score = 0;
+
+    // Material and positional evaluation
+    const board = this.game.board();
+
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        const piece = board[i][j];
+        if (piece) {
+          const pieceValue = this.getPieceValue(piece, i, j);
+          score += piece.color === 'b' ? pieceValue : -pieceValue;
+        }
+      }
+    }
+
+    // Mobility evaluation (number of legal moves)
+    const currentMoves = this.game.moves().length;
+    if (this.game.turn() === 'b') {
+      score += currentMoves * 0.1;
+    } else {
+      score -= currentMoves * 0.1;
+    }
+
+    // King safety evaluation
+    score += this.evaluateKingSafety('b') - this.evaluateKingSafety('w');
+
+    // Pawn structure evaluation
+    score += this.evaluatePawnStructure('b') - this.evaluatePawnStructure('w');
+
+    return score;
+  }
+
+  getPieceValue(piece, row, col) {
+    // Base piece values
     const pieceValues = {
-      'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 0
+      'p': 100,
+      'n': 320,
+      'b': 330,
+      'r': 500,
+      'q': 900,
+      'k': 20000
     };
-    
-    moves.forEach(move => {
-      let score = 0;
-      
-      // Prefer captures
-      if (move.captured) {
-        score += pieceValues[move.captured] * 10;
-      }
-      
-      // Prefer center squares
-      const centerSquares = ['d4', 'd5', 'e4', 'e5'];
-      if (centerSquares.includes(move.to)) {
-        score += 2;
-      }
-      
-      // Avoid moving into attacks (simple check)
-      score -= this.countAttackers(move.to) * 0.5;
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestMoves = [move];
-      } else if (score === bestScore) {
-        bestMoves.push(move);
-      }
-    });
-    
-    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+
+    const baseValue = pieceValues[piece.type];
+
+    // Piece-square tables for positional evaluation
+    const pawnTable = [
+      [0,  0,  0,  0,  0,  0,  0,  0],
+      [50, 50, 50, 50, 50, 50, 50, 50],
+      [10, 10, 20, 30, 30, 20, 10, 10],
+      [5,  5, 10, 25, 25, 10,  5,  5],
+      [0,  0,  0, 20, 20,  0,  0,  0],
+      [5, -5,-10,  0,  0,-10, -5,  5],
+      [5, 10, 10,-20,-20, 10, 10,  5],
+      [0,  0,  0,  0,  0,  0,  0,  0]
+    ];
+
+    const knightTable = [
+      [-50,-40,-30,-30,-30,-30,-40,-50],
+      [-40,-20,  0,  0,  0,  0,-20,-40],
+      [-30,  0, 10, 15, 15, 10,  0,-30],
+      [-30,  5, 15, 20, 20, 15,  5,-30],
+      [-30,  0, 15, 20, 20, 15,  0,-30],
+      [-30,  5, 10, 15, 15, 10,  5,-30],
+      [-40,-20,  0,  5,  5,  0,-20,-40],
+      [-50,-40,-30,-30,-30,-30,-40,-50]
+    ];
+
+    const bishopTable = [
+      [-20,-10,-10,-10,-10,-10,-10,-20],
+      [-10,  0,  0,  0,  0,  0,  0,-10],
+      [-10,  0,  5, 10, 10,  5,  0,-10],
+      [-10,  5,  5, 10, 10,  5,  5,-10],
+      [-10,  0, 10, 10, 10, 10,  0,-10],
+      [-10, 10, 10, 10, 10, 10, 10,-10],
+      [-10,  5,  0,  0,  0,  0,  5,-10],
+      [-20,-10,-10,-10,-10,-10,-10,-20]
+    ];
+
+    const rookTable = [
+      [0,  0,  0,  0,  0,  0,  0,  0],
+      [5, 10, 10, 10, 10, 10, 10,  5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [0,  0,  0,  5,  5,  0,  0,  0]
+    ];
+
+    const queenTable = [
+      [-20,-10,-10, -5, -5,-10,-10,-20],
+      [-10,  0,  0,  0,  0,  0,  0,-10],
+      [-10,  0,  5,  5,  5,  5,  0,-10],
+      [-5,  0,  5,  5,  5,  5,  0, -5],
+      [0,  0,  5,  5,  5,  5,  0, -5],
+      [-10,  5,  5,  5,  5,  5,  0,-10],
+      [-10,  0,  5,  0,  0,  0,  0,-10],
+      [-20,-10,-10, -5, -5,-10,-10,-20]
+    ];
+
+    const kingMiddleGameTable = [
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-30,-40,-40,-50,-50,-40,-40,-30],
+      [-20,-30,-30,-40,-40,-30,-30,-20],
+      [-10,-20,-20,-20,-20,-20,-20,-10],
+      [20, 20,  0,  0,  0,  0, 20, 20],
+      [20, 30, 10,  0,  0, 10, 30, 20]
+    ];
+
+    // Select appropriate table
+    let table;
+    switch (piece.type) {
+      case 'p': table = pawnTable; break;
+      case 'n': table = knightTable; break;
+      case 'b': table = bishopTable; break;
+      case 'r': table = rookTable; break;
+      case 'q': table = queenTable; break;
+      case 'k': table = kingMiddleGameTable; break;
+      default: table = null;
+    }
+
+    // Apply positional bonus (flip for white pieces)
+    let positionalValue = 0;
+    if (table) {
+      const tableRow = piece.color === 'b' ? row : 7 - row;
+      positionalValue = table[tableRow][col];
+    }
+
+    return baseValue + positionalValue;
   }
 
-  getHardMove(moves) {
-    // Hard: More strategic thinking
-    // For now, use medium logic with some improvements
-    // In a real implementation, you'd want minimax or similar
-    return this.getMediumMove(moves);
+  evaluateKingSafety(color) {
+    let safety = 0;
+    const board = this.game.board();
+
+    // Find king position
+    let kingPos = null;
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        const piece = board[i][j];
+        if (piece && piece.type === 'k' && piece.color === color) {
+          kingPos = { row: i, col: j };
+          break;
+        }
+      }
+      if (kingPos) break;
+    }
+
+    if (!kingPos) return 0;
+
+    // Check for pawn shield
+    const direction = color === 'w' ? -1 : 1;
+    const shieldRow = kingPos.row + direction;
+
+    if (shieldRow >= 0 && shieldRow < 8) {
+      for (let colOffset = -1; colOffset <= 1; colOffset++) {
+        const col = kingPos.col + colOffset;
+        if (col >= 0 && col < 8) {
+          const piece = board[shieldRow][col];
+          if (piece && piece.type === 'p' && piece.color === color) {
+            safety += 10;
+          }
+        }
+      }
+    }
+
+    return safety;
   }
 
-  countAttackers(square) {
-    // Simple function to count how many white pieces attack a square
-    let count = 0;
-    const moves = this.game.moves({ verbose: true, square: square });
-    return moves.length;
+  evaluatePawnStructure(color) {
+    let score = 0;
+    const board = this.game.board();
+
+    // Check for doubled pawns and isolated pawns
+    for (let col = 0; col < 8; col++) {
+      let pawnsInCol = 0;
+      let hasPawnInAdjacentCol = false;
+
+      for (let row = 0; row < 8; row++) {
+        const piece = board[row][col];
+        if (piece && piece.type === 'p' && piece.color === color) {
+          pawnsInCol++;
+        }
+      }
+
+      // Check adjacent columns for pawns
+      for (let adjacentCol of [col - 1, col + 1]) {
+        if (adjacentCol >= 0 && adjacentCol < 8) {
+          for (let row = 0; row < 8; row++) {
+            const piece = board[row][adjacentCol];
+            if (piece && piece.type === 'p' && piece.color === color) {
+              hasPawnInAdjacentCol = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Penalty for doubled pawns
+      if (pawnsInCol > 1) {
+        score -= 10 * (pawnsInCol - 1);
+      }
+
+      // Penalty for isolated pawns
+      if (pawnsInCol > 0 && !hasPawnInAdjacentCol) {
+        score -= 15;
+      }
+    }
+
+    return score;
+  }
+
+  shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
   }
 
   highlightLastMove() {
@@ -549,23 +857,9 @@ class QuickChess {
   }
 
   /* 
-  // Production Chrome Web Store payment implementation:
-  async purchasePremium() {
-    try {
-      // Use Chrome Web Store Licensing API
-      const response = await chrome.identity.getAuthToken({interactive: true});
-      
-      // Process payment with Google Payments
-      const result = await chrome.payments.buy({
-        'sku': 'premium_chess_unlock',
-        'success': this.onPurchaseSuccess.bind(this),
-        'failure': this.onPurchaseFailure.bind(this)
-      });
-      
-    } catch (error) {
-      console.error('Purchase failed:', error);
-    }
-  }
+  // Production monetization strategy:
+  // Consider integrating with a third-party payment provider like Stripe 
+  // or LemonSqueezy for premium features.
   */
 }
 
