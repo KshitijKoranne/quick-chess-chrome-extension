@@ -1,80 +1,30 @@
-# QuickChess Chrome Extension
+# QuickChess
 
-A lightweight Chrome extension that allows you to play chess directly from your browser toolbar with AI opponents at three difficulty levels.
+**Chess without breaking your flow.**
 
-## Features
+QuickChess lets you challenge an AI opponent directly from your browser — without opening a separate website or app. Your game stays active as you switch between tabs, making it perfect for a quick move while coding, researching, or working.
 
-- 🎯 Instant access from browser toolbar
-- 🤖 AI opponent with Easy, Medium, and Hard difficulty levels
-- 💾 Automatic game state persistence
-- ↩️ Undo move functionality
-- 🔄 Restart game option
-- 🎨 Clean, minimalist UI
-- 📱 Responsive design
+[![Available in the Chrome Web Store](https://storage.googleapis.com/web-gcm-af-v2/chrome-web-store-badge.png)](https://chrome.google.com/webstore/detail/quickchess/YOUR_EXTENSION_ID)
 
-## Installation
+## Elevate Your Productivity Breaks
 
-1. **Create Icons** (Required before installation):
-   - Open `create-icons.html` in your browser
-   - Right-click each canvas image and save as PNG:
-     - Save 16x16 canvas as `assets/icons/icon16.png`
-     - Save 48x48 canvas as `assets/icons/icon48.png` 
-     - Save 128x128 canvas as `assets/icons/icon128.png`
+Stop sacrificing your concentration for a quick game. QuickChess is a surgical, lightweight chess engine designed to live entirely in your toolbar.
 
-2. **Install Extension**:
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode" (top right toggle)
-   - Click "Load unpacked"
-   - Select the `quick-chess-extension` folder
-   - The QuickChess icon should appear in your toolbar
+### Why QuickChess?
 
-## How to Play
+- **🧠 Deep-Thinking AI**: Powered by a classical minimax engine. Challenge yourself against four levels: Easy, Medium, Hard, and the elite **Grandmaster** mode.
+- **⚡ Zero-Jank Performance**: Optimized with asynchronous "yielding" technology. The AI thinks in the background, keeping your browser fast and your animations smooth.
+- **💾 Auto-Save Persistence**: Switch tabs, close your browser, or take a call. Your board state is saved instantly and resumes the moment you click the icon.
+- **🚫 Clean & Private**: No ads, no tracking, no account required. Just 64 squares and your next move.
 
-1. Click the QuickChess icon in your browser toolbar
-2. Select difficulty level (first time only)
-3. Click on a piece to select it
-4. Click on a highlighted square to move
-5. Use the control buttons to:
-   - Change difficulty
-   - Undo your last move
-   - Restart the game
+---
 
-## Technical Details
+## Perfect For
 
-- Built with vanilla JavaScript for fast performance
-- Uses Chrome Storage API for game persistence
-- Fully offline-capable
-- Manifest V3 compatible
-- Popup size: 350x450px
+- **Developers**: The ultimate "compile-time" companion.
+- **Productivity Enthusiasts**: Quick mental resets between deep-work sessions.
+- **Chess Purists**: A distraction-free environment to practice tactics anytime, anywhere.
 
-## File Structure
+---
 
-```
-quick-chess-extension/
-├── manifest.json          # Extension configuration
-├── popup.html            # Main UI
-├── popup.css             # Styling
-├── popup.js              # Game logic
-├── background.js         # Service worker
-├── create-icons.html     # Icon generation tool
-└── assets/
-    └── icons/           # Extension icons (create these first)
-```
-
-## Development
-
-The extension is ready to use as-is. Key components:
-
-- **Chess Logic**: Full chess rule validation including piece movement, captures, and game state
-- **AI Opponent**: Three difficulty levels with different strategic approaches
-- **Persistence**: Games automatically save and resume
-- **UI**: Responsive chessboard with piece highlighting and move indicators
-
-## Future Enhancements
-
-- Integration with Stockfish.js for stronger AI
-- Additional chess variants
-- Move notation display
-- Game statistics
-- Custom themes
-- Timed game modes
+*Built with ❤️ for the chess community.*
