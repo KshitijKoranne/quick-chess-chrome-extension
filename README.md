@@ -35,4 +35,4 @@ Stop sacrificing your concentration for a quick game. QuickChess is a lightweigh
 
 *Search Keywords: Chess, Chess Extension, Play Chess, Online Chess, Offline Chess, Chess AI, Chrome Game, Productivity Break, Grandmaster Chess, Lightweight Chess.*
 
-*Built with ❤️ for the chess community.*
+*Built with ❤️ by KJR Labs*
